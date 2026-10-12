@@ -29,8 +29,6 @@ class AtomicLayer(nn.Module):
         self.fnn_cutoff = nn.Sequential(
             nn.Linear(1, hid_width),
             nn.SiLU(),
-            nn.Linear(hid_width, hid_width),
-            nn.SiLU(),
             nn.Linear(hid_width, d_model)
         )
 
@@ -43,15 +41,9 @@ class AtomicLayer(nn.Module):
     def forward(self, ato_emb, ato_env, rel_disij, J0ij, J0ijk, padding, w):
         srij = self.s5(rel_disij[...,None]) * (rel_disij[...,None] > 1e-2) * padding
 
-        env_field = torch.einsum(
-            'B N M d, B N M s -> B N d s',
-            ato_env * srij,
-            J0ij
-        )
-
         env_probe = torch.einsum(
             'B N M d, B N M O s -> B N O d s',
-            ato_env * srij,
+            ato_env,# * srij,
             J0ijk
         ) + torch.einsum(
             'B N d, B N M s -> B N M d s',
@@ -68,6 +60,12 @@ class AtomicLayer(nn.Module):
 
         ato_env = self.env_norm_in(env_probe + ato_env)
         ato_env = self.env_norm_out(self.fnn_env(ato_env) + ato_env)
+
+        env_field = torch.einsum(
+            'B N M d, B N M s -> B N d s',
+            ato_env * srij,
+            J0ij
+        )
 
         ato_probe = torch.einsum(
             'B N n s, B N n, s n m -> B N m',

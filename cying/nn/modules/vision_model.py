@@ -120,4 +120,4 @@ class VisionModel(nn.Module):
         return self.prediction_heads(queries, pixel_features)
 
     def get_mask_weight(self):
-        return self.backbone.get_mask_weight() + self.encoder.get_mask_weight()
+        return self.backbone.get_mask_weight() + self.encoder.get_mask_weight() + list(self.decoder.parameters()) + list(self.prediction_heads.parameters())
