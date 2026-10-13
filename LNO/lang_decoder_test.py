@@ -124,7 +124,7 @@ for i in range(epoch):
         pbar.set_description(f"Epoch {i+1}/{epoch} Loss {loss.item()*scale:.4e}")
         j += 1
         if j % 1000 == 0:
-            torch.save(opt_lang_model,'../models/model.pth')
+            torch.save(opt_lang_model,'./model.pth')
     with torch.no_grad():
         opt_lang_model.eval()
         pbar = tqdm(valid_loader)
