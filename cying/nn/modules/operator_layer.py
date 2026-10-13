@@ -4,6 +4,20 @@ import torch.nn.functional as F
 from .conv import Conv1d, Conv2d, Conv3d
 from .spectral_conv import SpectralConv1d, SpectralConv2d, SpectralConv3d
 
+class ChannelRMSNorm2d(nn.Module):
+    def __init__(self, channels, eps=1e-6):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(channels))
+        self.eps = eps
+
+    def forward(self, x):
+        mean_hw = x.mean(dim=(2, 3), keepdim=True)
+        
+        var_c = mean_hw.var(dim=1, keepdim=True, unbiased=False)
+        
+        x = x * torch.rsqrt(var_c + self.eps)
+        
+        return x * self.weight[None, :, None, None]
 
 class BaseOperatorLayer(nn.Module):
     def __init__(self, size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size):
@@ -17,21 +31,31 @@ class BaseOperatorLayer(nn.Module):
         self.spectral_opts = self._create_spectral_opts()
         self.spatial_opts = self._create_spatial_opts()
         self.nonlinear_opts = nn.Sequential(
-            nn.Linear(self.in_channels, self.hidden_width),
-            nn.GELU(),
-            nn.Linear(self.hidden_width, self.out_channels)
+            nn.Conv2d(
+                self.in_channels,
+                self.hidden_width,
+                kernel_size=1
+            ),
+            nn.SiLU(),
+            nn.Conv2d(
+                self.hidden_width,
+                self.out_channels,
+                kernel_size=1
+            )
         )
-        self.linear_skip = nn.Linear(self.in_channels, self.out_channels)
-        self.in_norm = nn.RMSNorm(in_channels)
-        self.out_norm = nn.RMSNorm(out_channels)
+        
+        self.linear_skip = nn.Conv2d(
+            self.in_channels,
+            self.out_channels,
+            kernel_size=1
+        )
+        self.norm_in = ChannelRMSNorm2d(in_channels)
+        self.norm_out = ChannelRMSNorm2d(out_channels)
 
-    def forward(self, input):
-        input = self._interpolate(input)
-        lin_opts = self.spectral_opts(input) + self.spatial_opts(input) + input
-        normed_lin_opts = self.in_norm(torch.movedim(lin_opts, 1, -1))
-        output = self.nonlinear_opts(normed_lin_opts) + self.linear_skip(normed_lin_opts)
-        normed_output = torch.movedim(self.out_norm(output), -1, 1)
-        return normed_output
+    def forward(self, input, mode='train'):
+        lin_opts = self.norm_in(self.spectral_opts(input, mode) + input)
+        outputs = self.norm_out(self.nonlinear_opts(lin_opts) + self.linear_skip(input))
+        return outputs
 
     def _interpolate(self, input):
         raise NotImplementedError

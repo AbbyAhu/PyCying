@@ -9,12 +9,12 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 from torchinfo import summary
 num_class = 10**4
-opt_lang_model = cynn.OptLangModel(
+opt_lang_model = cynn.LangModel(
     num_class,
-    512,
+    128,
     4,
-    2048,
-    10
+    512,
+    3
 ).to(device)
 summary(opt_lang_model)
 
@@ -23,7 +23,7 @@ from tokenizers import Tokenizer
 from torch.utils.data import Dataset, DataLoader
 
 scale = 8
-max_seq_len = 1024
+max_seq_len = 128
 batch_size = 4
 
 class Trans2019(Dataset):
@@ -71,9 +71,9 @@ class Trans2019(Dataset):
     def __len__(self):
         return len(self.data_english) // batch_size * batch_size
 
-tokenizer = Tokenizer.from_file("../cying/datasets/translation2019zh/tokenizer.json")
+tokenizer = Tokenizer.from_file(f"/Volumes/T9/文章发表/AForNow/PyCying/PyCying/cying/datasets/translation2019zh/tokenizer.json")
 trans_dataset = Trans2019(
-    filepath=f'../cying/datasets/translation2019zh/translation2019zh_train.json',
+    filepath=f'/Volumes/T9/文章发表/AForNow/PyCying/PyCying/cying/datasets/translation2019zh/translation2019zh_train.json',
     tokenizer=tokenizer,
     seq_len=max_seq_len
 )
@@ -83,7 +83,7 @@ train_loader = DataLoader(
     shuffle=True
 )
 valid_dataset = Trans2019(
-    filepath=f'../cying/datasets/translation2019zh/translation2019zh_valid.json',
+    filepath=f'/Volumes/T9/文章发表/AForNow/PyCying/PyCying/cying/datasets/translation2019zh/translation2019zh_valid.json',
     tokenizer=tokenizer,
     seq_len=max_seq_len
 )

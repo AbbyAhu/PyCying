@@ -1,5 +1,5 @@
 from .conv import Conv1d, Conv2d, Conv3d
-from .spectral_conv import SpectralConv1d, SpectralConv2d, SpectralConv3d
+from .spectral_conv import SpectralConv1d, SpectralConv2d, SpectralConv3d, BSpline1D
 from .operator_layer import OperatorLayer1d, OperatorLayer2d, OperatorLayer3d
 from .operator_model import OperatorModel1d, OperatorModel2d, OperatorModel3d
 from .lang_layer import LangLayer
@@ -12,7 +12,7 @@ from .vision_model import VisionModel
 
 __all__ = [
     'Conv1d', 'Conv2d', 'Conv3d',
-    'SpectralConv1d', 'SpectralConv2d', 'SpectralConv3d',
+    'SpectralConv1d', 'SpectralConv2d', 'SpectralConv3d', 'BSpline1D',
     'OperatorLayer1d', 'OperatorLayer2d', 'OperatorLayer3d',
     'OperatorModel1d', 'OperatorModel2d', 'OperatorModel3d',
     'LangLayer', 'LangModel',
