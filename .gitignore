@@ -1,5 +1,7 @@
 .vscode/
 __pycache__/
+._*
+.DS_Store
 
 OMat24/
 translation2019zh/

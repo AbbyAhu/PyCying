@@ -6,6 +6,12 @@ multi-head frequency-domain attention and a nonlinear transformation.
 import torch
 import torch.nn as nn
 
+class SIREN(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return torch.sin(x)
 
 class LangLayer(nn.Module):
     """Operator language layer.
@@ -26,24 +32,25 @@ class LangLayer(nn.Module):
         self.d_model = d_model
         self.num_heads = num_heads
         self.hidden_width = hidden_width
-        self.d_head = d_model // num_heads
 
-        self.h_linear = nn.Linear(d_model, d_model, bias=False)
-        qk_weight = torch.stack(
-            [
-                torch.ones(num_heads, self.d_head // 2 + 1),
-                torch.zeros(num_heads, self.d_head // 2 + 1),
-            ],
-            dim=-1,
+        self.q_tensor = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            SIREN()
         )
-        self.qk_weight = nn.Parameter(qk_weight)
+        self.k_tensor = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            SIREN()
+        )
+
+        self.v_linear = nn.Linear(d_model, d_model, bias=False)
 
         self.att_linear = nn.Linear(d_model, d_model, bias=False)
 
         self.register_buffer(
             "theta",
-            10000 ** (2 * torch.arange(0, self.d_head // 2 + 1) / self.d_head),
+            10000 ** (2 * torch.arange(0, d_model) / d_model),
         )
+        self.s_linear = nn.Linear(d_model, d_model, bias=False)
 
         self.nonlinear = nn.Sequential(
             nn.Linear(self.d_model, self.hidden_width),
@@ -92,7 +99,7 @@ class LangLayer(nn.Module):
 
         if padding_mask is not None:
             scores = scores.masked_fill(
-                mask=padding_mask.view((1, batch_size, 1, seq_len)),
+                mask=padding_mask.view((batch_size, 1, seq_len, 1)),
                 value=-float("inf"),
             )
 
@@ -101,45 +108,37 @@ class LangLayer(nn.Module):
                 mask=causal_mask,
                 value=-float("inf"),
             )
-
-        attention = torch.softmax(scores, dim=-1)
+        
         out = torch.einsum(
-            "n b t s, b s n d -> b t n d",
-            attention,
-            values,
+            "b t s d, b s d -> b t d",
+            scores.softmax(dim=-2),
+            values
         )
 
-        return self.att_linear(out.flatten(-2, -1))
+        return self.att_linear(out)
 
     def _get_score_value(
         self,
         token_seq
     ):
         """Generate attention scores and value features."""
-        batch_size, seq_len, _ = token_seq.shape
-
         position_embeddings = torch.exp(
             1j * torch.arange(
                 0,
-                seq_len,
+                token_seq.size(1),
                 device=token_seq.device
-            )[..., None, None] / self.theta[None, None, :]
+            )[..., None] / self.theta[None, :]
         )
 
-        token_seq = self.h_linear(token_seq).view(
-            batch_size,
-            seq_len,
-            self.num_heads,
-            self.d_head
-        )
-
-        qk_freq = torch.fft.rfft(token_seq) * position_embeddings / self.d_head
+        q_tensor = self.q_tensor(token_seq) * position_embeddings
+        k_tensor = self.k_tensor(token_seq) * position_embeddings.conj()
 
         scores = torch.einsum(
-            "b t n d, n d, b s n d -> n b t s",
-            qk_freq,
-            torch.view_as_complex(self.qk_weight),
-            qk_freq.conj()
+            "b t d, b s d -> b t s d",
+            q_tensor,
+            k_tensor
         ).real
 
-        return scores, token_seq
+        scores = self.s_linear(scores)
+
+        return scores, self.v_linear(token_seq)
